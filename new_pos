@@ -1,0 +1,159 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import inventory_bos
+
+inventory = inventory_bos.nosh_inventory
+cart = {}
+
+def add_to_cart():
+    item_name = item_entry.get().strip()
+    if not item_name:
+        messagebox.showwarning('Missing Item', 'Enter an item name first.')
+        return
+
+    try:
+        quantity = int(quantity_entry.get())
+        if quantity <= 0:
+            raise ValueError
+    except ValueError:
+        messagebox.showwarning('Invalid Quantity', 'Enter a valid quantity greater than zero.')
+        return
+
+    item = inventory.get_item(item_name)
+    if item is None:
+        messagebox.showwarning('Item Not Found', f"Item '{item_name}' not found at Nosh & Nibbles.")
+        return
+
+    if item.quantity < quantity:
+        messagebox.showwarning('Insufficient Stock', f"Only {item.quantity} of '{item.name}' are available.")
+        return
+
+    inventory.decrement_item(item_name, quantity)
+    if item.name in cart:
+        cart[item.name]['quantity'] += quantity
+    else:
+        cart[item.name] = {'item': item, 'quantity': quantity}
+
+    item_entry.delete(0, tk.END)
+    quantity_entry.delete(0, tk.END)
+    quantity_entry.insert(0, '1')
+
+    update_cart_display()
+    update_totals()
+
+
+def update_cart_display():
+    cart_listbox.delete(0, tk.END)
+    for name, data in cart.items():
+        item = data['item']
+        quantity = data['quantity']
+        line_total = quantity * item.price
+        cart_listbox.insert(tk.END, f"{name} x {quantity} @ ${item.price:.2f} = ${line_total:.2f}")
+
+
+def update_totals():
+    total_items = sum(data['quantity'] for data in cart.values())
+    total_price = sum(data['quantity'] * data['item'].price for data in cart.values())
+    total_label.config(text=f'Total Items: {total_items}')
+    total_price_label.config(text=f'Total Price: ${total_price:.2f}')
+
+
+def clear_cart():
+    if not cart:
+        return
+    for name, data in cart.items():
+        inventory.restore_quantity(name, data['quantity'])
+    cart.clear()
+    update_cart_display()
+    update_totals()
+
+
+def delete_selected_item():
+    selection = cart_listbox.curselection()
+    if not selection:
+        messagebox.showwarning('No Selection', 'Please select an item to delete.')
+        return
+    
+    index = selection[0]
+    item_name = list(cart.keys())[index]
+    
+    inventory.restore_quantity(item_name, cart[item_name]['quantity'])
+    del cart[item_name]
+    update_cart_display()
+    update_totals()
+
+
+def checkout():
+    if not cart:
+        messagebox.showinfo('Checkout', 'Please add items to the cart to checkout.')
+        return
+
+    total_items = sum(data['quantity'] for data in cart.values())
+    total_price = sum(data['quantity'] * data['item'].price for data in cart.values())
+    messagebox.showinfo(
+        'Checkout',
+        f'Total Items: {total_items}\nTotal Price: ${total_price:.2f}\n\nPlease see Cashier for payment\nThank you for shopping at \nNosh & Nibbles!',
+    )
+    cart.clear()
+    update_cart_display()
+    update_totals()
+
+
+def exit_app():
+    root.destroy()
+
+
+root = tk.Tk()
+root.title('Nosh & Nibbles Grocer')
+
+content = ttk.Frame(root, padding=(10, 10, 10, 10))
+content.grid(column=0, row=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+root.columnconfigure(0, weight=1)
+root.rowconfigure(0, weight=1)
+content.columnconfigure(0, weight=1)
+content.columnconfigure(1, weight=1)
+content.columnconfigure(2, weight=1)
+
+item_label = ttk.Label(content, text='Enter Item:')
+item_label.grid(column=0, row=0, padx=5, pady=5, sticky=tk.W)
+
+item_entry = ttk.Entry(content, width=20)
+item_entry.grid(column=1, row=0, padx=5, pady=5, sticky=(tk.W, tk.E))
+item_entry.bind('<Return>', lambda event: add_to_cart())
+
+quantity_label = ttk.Label(content, text='Quantity:')
+quantity_label.grid(column=0, row=1, padx=5, pady=5, sticky=tk.W)
+
+quantity_entry = ttk.Entry(content, width=20)
+quantity_entry.insert(0, '1')
+quantity_entry.grid(column=1, row=1, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+add_button = ttk.Button(content, text='Add to Cart', command=add_to_cart)
+add_button.grid(column=1, row=4, rowspan=2, padx=5, pady=5, sticky=(tk.N, tk.S, tk.E, tk.W))
+
+clear_button = ttk.Button(content, text='Delete Selected Item', command=delete_selected_item)
+clear_button.grid(column=2, row=5, padx=5, pady=5, sticky=(tk.N, tk.S, tk.E, tk.W))
+
+cart_label = ttk.Label(content, text='Cart:')
+cart_label.grid(column=0, row=5, padx=5, pady=5, sticky=tk.W)
+
+cart_listbox = tk.Listbox(content, height=10)
+cart_listbox.grid(column=0, row=6, columnspan=3, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+total_label = ttk.Label(content, text='Total Items: 0')
+total_label.grid(column=0, row=7, columnspan=2, padx=5, pady=5, sticky=tk.W)
+
+total_price_label = ttk.Label(content, text='Total Price: $0.00')
+total_price_label.grid(column=0, row=8, columnspan=2, padx=5, pady=5, sticky=tk.W)
+
+new_order_button = ttk.Button(content, text='Start New Order', command=clear_cart)
+new_order_button.grid(column=0, row=9, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+checkout_button = ttk.Button(content, text='Checkout', command=checkout)
+checkout_button.grid(column=1, row=9, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+exit_button = ttk.Button(content, text='Exit', command=exit_app)
+exit_button.grid(column=2, row=9, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+root.mainloop()
